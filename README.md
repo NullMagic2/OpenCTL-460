@@ -79,7 +79,6 @@ The intention is not to make every stroke artificially smooth. The controls are 
 
 ## Wintab + Windows Ink, per application
 
-One of OpenCTL 460's main goals is to avoid the usual all-or-nothing choice between legacy **Wintab** and **Windows Ink**.
 
 Different applications can require different tablet APIs. With per-application configuration, a typical setup can look like this:
 
@@ -90,7 +89,7 @@ Different applications can require different tablet APIs. With per-application c
 | Handwriting / note-taking apps | Windows Ink |
 | Software with better legacy tablet support | Wintab |
 
-Both APIs can therefore coexist in the same driver setup instead of requiring repeated global changes.
+With OpenCTL-460, both APIs can therefore coexist in the same driver setup instead of requiring repeated global changes!
 
 ---
 
