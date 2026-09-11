@@ -1,0 +1,13 @@
+# Reference profile: linear full-range pressure and no time/position smoothing.
+# Aspect correction remains enabled so the A/B comparison isolates filtering.
+floor = 0
+ceiling = 1023
+gamma = 1.0
+gain = 1.0
+smoothing_ms = 0.0
+interpolation_ms = 0.0
+press_on = 1
+press_off = 0
+stroke_smoothing = false
+preserve_aspect = true
+wobble_reduction = 0.0

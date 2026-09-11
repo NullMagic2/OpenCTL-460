@@ -1,0 +1,27 @@
+# Builds the same WinTab ABI provider for 32-bit and 64-bit applications.
+[package]
+name = "ctl460-wintab"
+version = "0.2.2"
+edition = "2021"
+license = "MIT"
+autotests = false
+
+[lib]
+name = "wintab32"
+crate-type = ["cdylib", "rlib"]
+test = true
+doctest = false
+
+[dependencies]
+hidapi = "2.6"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse", "Win32_Security", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[[test]]
+name = "wintab_tests"
+path = "../debug/wintab_tests.rs"
+
+[workspace]

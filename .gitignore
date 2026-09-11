@@ -1,0 +1,6 @@
+# Keeps generated builds, binaries and debug recordings out of source control.
+/target/
+/kernel/target/
+/wintab/target/
+/dist/
+/debug/generated/

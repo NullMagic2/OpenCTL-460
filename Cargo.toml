@@ -1,0 +1,105 @@
+# Defines the open-source user-mode driver and keeps all test sources in debug/.
+[package]
+name = "ctl460-rust"
+version = "0.3.5"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Experimental Wacom CTL-460 pressure processor and Windows Ink driver"
+autotests = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+wintab32 = { package = "ctl460-wintab", path = "wintab" }
+hidapi = "2.6"
+ctrlc = "3.4"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Devices_DeviceAndDriverInstallation", "Win32_Devices_Properties", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Pipes", "Win32_System_Services", "Win32_System_EventLog", "Win32_System_RemoteDesktop", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_WindowsProgramming", "Win32_Graphics_Gdi", "Win32_Graphics_GdiPlus", "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_Media", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Input_Pointer", "Win32_UI_WindowsAndMessaging", "Win32_UI_HiDpi"] }
+
+[[test]]
+name = "driver_tests"
+path = "debug/driver_tests.rs"
+
+[[bin]]
+name = "ctl460-input-test"
+path = "debug/input_canvas.rs"
+
+[[bin]]
+name = "ctl460-hid-inspect"
+path = "debug/hid_inspect.rs"
+
+[[test]]
+name = "handwriting_tests"
+path = "debug/handwriting_tests.rs"
+
+[[test]]
+name = "line_smoothing_tests"
+path = "debug/line_smoothing_tests.rs"
+
+[[test]]
+name = "wobble_tests"
+path = "debug/wobble_tests.rs"
+
+[[test]]
+name = "settings_tests"
+path = "debug/settings_tests.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+
+[[test]]
+name = "broker_tests"
+path = "debug/broker_tests.rs"
+
+# Live settings regression tests remain in the debug folder.
+[[test]]
+name = "live_settings_tests"
+path = "debug/live_settings_tests.rs"
+
+# Offline geometric and pressure audit; source and outputs stay in debug/.
+[[bin]]
+name = "ctl460-smoothing-audit"
+path = "debug/smoothing_audit.rs"
+
+# Button behavior tests inject only into a fake sink.
+[[test]]
+name = "button_tests"
+path = "debug/button_tests.rs"
+
+# Read-only edge diagnostics; never starts or modifies tablet input.
+[[bin]]
+name = "ctl460-edge-probe"
+path = "debug/edge_probe.rs"
+
+[[test]]
+name = "writing_filter_tests"
+path = "debug/writing_filter_tests.rs"
+
+[[bin]]
+name = "ctl460-writing-replay"
+path = "debug/writing_replay.rs"
+
+[[test]]
+name = "pen_control_tests"
+path = "debug/pen_control_tests.rs"
+
+[[test]]
+name = "circle_control_tests"
+path = "debug/circle_control_tests.rs"
+
+# Synthetic geometry audit; it does not start the tablet feeder.
+[[bin]]
+name = "ctl460-motion-audit"
+path = "debug/motion_filter_audit.rs"
+
+[[test]]
+name = "smoothing_guard_tests"
+path = "debug/smoothing_guard_tests.rs"

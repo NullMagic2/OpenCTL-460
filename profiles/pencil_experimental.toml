@@ -1,0 +1,12 @@
+# Artistic pencil mode: synthesized tilt from motion/pressure, not measured orientation.
+# Choose a tilt-aware pencil brush in the drawing app to see shading differences.
+ceiling = 1023
+gamma = 1.0
+smoothing_ms = 5.0
+interpolation_ms = 4.0
+stroke_smoothing = true
+stroke_min_cutoff_hz = 16.0
+stroke_beta = 0.4
+virtual_tilt = true
+tilt_max_degrees = 50.0
+preserve_aspect = true

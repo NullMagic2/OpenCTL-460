@@ -1,0 +1,20 @@
+OpenCTL 460 experimental installation notes.
+
+Choose All users or Just me at startup. The app, searchable Start menu entry and uninstall registration follow that scope. Both choices require administrator approval to install the shared Windows tablet components. To change the scope or folder of an existing installation, uninstall it first; only one OpenCTL installation may own the shared tablet components at a time.
+
+Initialize when Windows starts is a per-user checkbox in the settings sidebar. It starts the application in the tray and starts the driver at sign-in. Uninstall removes this installation's startup links and Start menu shortcuts.
+
+Setup automatically closes the installed OpenCTL settings app and feeder before replacing files, including when the window is hidden in the system tray. If shutdown stalls, setup terminates them after a short wait. Save pending settings before installing; unsaved edits are not saved automatically.
+
+Before making changes, setup lists applications using either system WinTab DLL (for example, Photoshop). Save your work, fully close the listed applications, and click Retry. Cancel stops this installation attempt. Setup does not close these drawing applications for you. Silent installation stops if the check detects a running tablet application or cannot complete. The shared-component installer checks again in case an application was reopened during setup.
+
+Choose the application folder on the Select Destination Location page. It contains the settings app, helpers, assets and bundled driver package. Windows manages the installed kernel driver and Driver Store locations; system WinTab DLLs also remain in Windows system folders. User settings remain in LocalAppData. To move an existing installation, uninstall it first and then install into the new folder so its WinTab recovery records stay intact.
+
+Setup installs the native settings app, the user-mode Windows Ink feeder, and both WinTab DLLs by default. Close tablet applications before installing. Existing system WinTab DLLs are backed up and restored on uninstall only if another installer has not replaced our copies afterward. A DLL supplied inside an application's own folder may override the system WinTab provider.
+
+Official Wacom software can conflict with Studio by holding the tablet connection or producing duplicate input. Virtual HID sessions temporarily stop the running TabletServicePen and TouchServicePen services and restore them when the session ends normally or encounters a handled failure. Direct Windows Ink sessions do not automate this handoff. The physical Wacom USB driver is not uninstalled or rebound. Studio's system WinTab replacement can affect other Wacom tablets and WinTab applications: stopping Studio alone does not restore the official WinTab provider; uninstalling restores the backed-up provider when the installed files are still ours.
+
+Setup trusts the bundled development certificate and installs the virtual HID kernel package and a Windows service. The service executable stays in the protected Common Files\OpenCTL460 folder even when you select another application folder. This uses the installer's administrator approval once; routine Virtual HID startup does not show another permission prompt. Windows Test Mode and any required Secure Boot change must already be configured; setup does not change boot policy or firmware. A restart may be required. See docs/SIGNING.md and docs/SERVICE.md.
+The CTL-460 measures 1,024 pressure values. Software produces 4,098 output values; interpolation does not add physical sensor precision. Tilt and automatic handwriting detection are optional estimates.
+
+Physical CTL-460 report acquisition and Windows Ink delivery to our test canvas were verified. Version 0.1.1 fixes pen-interface selection and its initialization was verified on the connected tablet. Kernel loading and compatibility across drawing applications remain unverified. Original Wacom services can still compete for pen reports; see README.md. Valid settings changes apply automatically; changes that would interrupt an active stroke wait until the pen is lifted.

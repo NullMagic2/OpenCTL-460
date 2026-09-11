@@ -1,0 +1,9 @@
+# Starting point for flowing ink lines with independent artistic controls.
+# Percentages use this driver's own tuning scale.
+stroke_smoothing = false
+streamline_amount = 35.0
+streamline_pressure = 20.0
+stabilization_amount = 20.0
+motion_filter_amount = 25.0
+motion_filter_expression = 50.0
+handwriting_mode = "off"

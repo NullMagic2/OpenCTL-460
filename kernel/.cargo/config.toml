@@ -1,0 +1,3 @@
+# Uses kernel-compatible static runtime linkage in the separate kernel build.
+[build]
+rustflags = ["-C", "target-feature=+crt-static"]

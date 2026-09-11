@@ -1,0 +1,17 @@
+# General drawing: straight full-range pressure and modest adaptive stroke stabilization.
+# Built-in defaults use the same values; tune while comparing against raw.toml.
+floor = 0
+ceiling = 1023
+gamma = 1.0
+gain = 1.0
+smoothing_ms = 6.0
+responsiveness = 12.0
+interpolation_ms = 4.0
+press_on = 3
+press_off = 1
+output_hz = 250
+stale_ms = 100
+stroke_smoothing = true
+stroke_min_cutoff_hz = 16.0
+stroke_beta = 0.4
+preserve_aspect = true

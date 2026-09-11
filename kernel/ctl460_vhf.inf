@@ -1,0 +1,58 @@
+; Installs the independent root-enumerated CTL-460 virtual pen source and Microsoft VHF lower filter.
+; This package never binds to or replaces the physical Wacom USB device's driver.
+[Version]
+Signature="$WINDOWS NT$"
+Class=HIDClass
+ClassGuid={745A17A0-74D3-11D0-B6FE-00A0C90F57DA}
+Provider=%Provider%
+DriverVer=09/09/2026,0.1.7.0
+CatalogFile=ctl460_vhf.cat
+PnpLockdown=1
+
+[Manufacturer]
+%Provider%=Models,NTamd64.10.0...22000
+
+[Models.NTamd64.10.0...22000]
+%Device%=Install,ROOT\CTL460VirtualPen
+
+[DestinationDirs]
+DriverCopy=13
+
+[SourceDisksNames]
+1=%Disk%,,,
+
+[SourceDisksFiles]
+ctl460_vhf.sys=1
+
+[Install.NT]
+CopyFiles=DriverCopy
+
+[DriverCopy]
+ctl460_vhf.sys
+
+[Install.NT.HW]
+AddReg=VhfFilter
+
+[VhfFilter]
+HKR,,LowerFilters,0x00010000,"vhf"
+
+[Install.NT.Services]
+AddService=CTL460Vhf,0x00000002,Service
+
+[Service]
+DisplayName=%Device%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%13%\ctl460_vhf.sys
+
+[Install.NT.Wdf]
+KmdfService=CTL460Vhf,Wdf
+
+[Wdf]
+KmdfLibraryVersion=1.33
+
+[Strings]
+Provider="CTL-460 Rust contributors"
+Device="CTL-460 Studio Virtual Pen"
+Disk="CTL-460 Studio driver package"

@@ -1,0 +1,11 @@
+# Small letters: lighter pressure filtering and adaptive coordinate stabilization.
+# Increase stroke_min_cutoff_hz if small corners feel rounded or strokes trail your hand.
+ceiling = 1023
+handwriting_mode = "on"
+gamma = 1.0
+smoothing_ms = 3.0
+interpolation_ms = 2.0
+stroke_smoothing = true
+stroke_min_cutoff_hz = 20.0
+stroke_beta = 0.5
+preserve_aspect = true
