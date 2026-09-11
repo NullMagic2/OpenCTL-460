@@ -4,7 +4,7 @@ A modern Windows driver and configuration utility for the **Wacom Bamboo CTL-460
 
 OpenCTL 460 is aimed at keeping the CTL-460 useful on modern Windows systems while improving responsiveness, smoothing, pressure handling, and application compatibility beyond what the legacy official driver offers.
 
-> Some features, especially assisted handwriting and virtual HID operation, may still be under development.
+*Note: Some features, especially assisted handwriting and virtual HID operation, may still be under development.*
 
 ---
 
