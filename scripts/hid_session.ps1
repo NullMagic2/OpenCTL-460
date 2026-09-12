@@ -27,6 +27,14 @@ try {
     $null=$gui.Handle
     if($event.WaitOne(0) -or $gui.HasExited){Set-SessionStatus 'cancelled' 'Start cancelled.';exit 0}
     $service=Get-Service -Name OpenCTL460Broker -ErrorAction SilentlyContinue
+    if($service -and $service.Status -eq 'StartPending') {
+        Set-SessionStatus 'starting' 'Waiting for the Windows tablet service to finish starting...'
+        $deadline=[DateTime]::UtcNow.AddSeconds(30)
+        while($service.Status -eq 'StartPending' -and [DateTime]::UtcNow -lt $deadline) {
+            if($event.WaitOne(150) -or $gui.HasExited){Set-SessionStatus 'cancelled' 'Start cancelled.';exit 0}
+            $service.Refresh()
+        }
+    }
     if(-not $service -or $service.Status -ne 'Running'){throw 'The OpenCTL 460 service is unavailable. Run the latest installer to install or repair it; routine startup needs no administrator prompt.'}
     $sessionLog=Join-Path (Split-Path -Parent $StatusPath) 'hid-feeder.log'
     $sessionOut=Join-Path (Split-Path -Parent $StatusPath) 'hid-feeder-output.log'

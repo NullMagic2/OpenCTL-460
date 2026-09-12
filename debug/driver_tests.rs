@@ -445,7 +445,7 @@ fn left_handed_mode_rotates_both_axes() {
 }
 
 #[test]
-fn simulated_tilt_is_opt_in_and_bounded() {
+fn legacy_tilt_cannot_enable_synthesis() {
     for enabled in [false, true] {
         let mut e = Engine::new(Config {
             virtual_tilt: enabled,
@@ -462,8 +462,8 @@ fn simulated_tilt_is_opt_in_and_bounded() {
             )
             .unwrap();
             let f = e.tick(f64::from(i) * 8.0);
-            assert_eq!(f.virtual_tilt, enabled);
-            assert!(f.tilt_x.abs() <= 50 && f.tilt_y.abs() <= 50);
+            assert!(!f.virtual_tilt);
+            assert_eq!((f.tilt_x, f.tilt_y), (0, 0));
             if !enabled {
                 assert_eq!((f.tilt_x, f.tilt_y), (0, 0));
             }
@@ -472,25 +472,29 @@ fn simulated_tilt_is_opt_in_and_bounded() {
 }
 
 #[test]
-fn tilt_holds_at_rest_and_resets_between_strokes() {
-    let mut t = ctl460_rust::tilt::VirtualTilt::default();
-    t.update(100, 100, 0.2, 8.0, 50.0);
-    let angle = t.update(500, 100, 0.2, 8.0, 50.0);
-    assert_ne!(angle, (0, 0));
-    assert_eq!(t.update(500, 100, 0.2, 8.0, 50.0), angle);
-    t.reset();
-    assert_eq!(t.update(500, 100, 0.2, 8.0, 50.0), (0, 0));
+fn legacy_tilt_settings_load_but_are_not_saved() {
+    let c = Config::parse("virtual_tilt = true\ntilt_max_degrees = 50.0").unwrap();
+    assert!(!c.virtual_tilt);
+    assert_eq!(c.tilt_max_degrees, 0.0);
+    let saved = toml::to_string(&c).unwrap();
+    assert!(!saved.contains("tilt"));
+    assert!(Config::parse("unrecognized_setting = true").is_err());
 }
 
 #[test]
-fn stroke_reversal_does_not_flip_tilt_hemisphere() {
-    let mut t = ctl460_rust::tilt::VirtualTilt::default();
-    t.update(100, 100, 0.2, 8.0, 50.0);
-    let a = t.update(500, 100, 0.2, 8.0, 50.0);
-    let b = t.update(100, 100, 0.2, 8.0, 50.0);
-    assert_eq!(a.1.signum(), b.1.signum());
+fn hid_discards_obsolete_frame_tilt() {
+    let report = hid::encode(Frame {
+        in_range: true,
+        contact: true,
+        pressure: 0.5,
+        virtual_tilt: true,
+        tilt_x: 50,
+        tilt_y: -50,
+        ..Default::default()
+    });
+    assert_eq!(&report[8..10], &[0, 0]);
+    assert!(ctl460_rust::wire::valid_report(&report));
 }
-
 #[test]
 fn arbitrary_shortcut_strings_are_rejected() {
     assert!(Config::parse("button1 = 'Execute arbitrary program'").is_err());

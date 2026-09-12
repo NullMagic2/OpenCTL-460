@@ -4,6 +4,8 @@
 #[cfg(windows)]
 pub mod broker;
 pub mod button_actions;
+pub mod calibration;
+pub mod calibration_pad;
 pub mod config;
 pub mod device_selection;
 pub mod double_click;
@@ -24,7 +26,6 @@ pub mod protocol;
 pub mod status;
 pub mod stroke;
 pub mod tablet_mode;
-pub mod tilt;
 pub mod trace;
 #[path = "../shared/wire.rs"]
 pub mod wire;
@@ -35,3 +36,15 @@ pub mod writing_filter;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod smoothing_guard;
+
+pub mod precision;
+pub mod shape_assist;
+#[cfg(windows)]
+pub mod start_marker;
+pub mod straight_assist;
+
+pub mod spectral_smoothing;
+
+pub mod startup_wait;
+
+pub mod endpoint_settling;

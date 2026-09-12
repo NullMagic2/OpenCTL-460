@@ -92,7 +92,7 @@ fn small_loops_stay_bounded_and_do_not_overshoot() {
 }
 
 #[test]
-fn hover_to_contact_keeps_damping_and_force_is_identical_with_combined_controls() {
+fn hover_to_contact_is_exact_and_force_is_identical_with_combined_controls() {
     for mode in ["off", "on"] {
         let config = Config {
             handwriting_mode: mode.into(),
@@ -123,10 +123,10 @@ fn hover_to_contact_keeps_damping_and_force_is_identical_with_combined_controls(
                 (b.pressure, b.contact, b.in_range, b.tilt_x, b.tilt_y)
             );
             if i == 100 {
-                assert!(
-                    (5001..=5007).contains(&a.x),
-                    "contact reset the hover filter: {}",
-                    a.x
+                assert_eq!(
+                    (a.x, a.y),
+                    (s.x, s.y),
+                    "stroke start must not inherit hover lag"
                 );
             }
         }

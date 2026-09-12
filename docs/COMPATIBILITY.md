@@ -46,8 +46,8 @@ kernel loading still require hardware verification. The active Test Mode query u
 integrity information rather than parsing localized BCDEdit output.
 
 The pencil preset now retains mapping choices, and WinTab uses the same normalized screen position
-as the Windows output. Simulated tilt does not modify X/Y. Graphite Studio's reported stationary
-offset still needs a real application retest; brush-specific tilt rendering can also affect its preview.
+as the Windows output. Automatic tilt has been removed. Graphite Studio's reported stationary
+offset still needs a real application retest.
 
 The Rust KMDF/VHF component compiles, passes WDK INF/signability checks, and has a generated
 free self-signed package. Loading it, Driver Verifier, sleep/wake, unplug/replug and Memory

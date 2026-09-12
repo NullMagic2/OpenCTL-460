@@ -1,6 +1,6 @@
 ; Builds an administrator setup wizard with mandatory 32/64-bit WinTab and per-user GUI settings.
 ; Existing WinTab DLLs are backed up by hash and restored only while our installed copy is unchanged.
-#define AppVersion "0.3.5"
+#define AppVersion "0.3.21"
 [Setup]
 AppId={{A5BA4A5A-2694-4982-9874-3BAC1CE7B92D}
 AppName=OpenCTL 460

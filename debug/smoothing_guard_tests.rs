@@ -13,6 +13,8 @@ fn sample(x: u16, y: u16, p: u16) -> Sample {
 }
 fn strong() -> Config {
     Config {
+        flowing_smoothing: false,
+        endpoint_settling: false,
         streamline_amount: 100.0,
         stabilization_amount: 100.0,
         motion_filter_amount: 100.0,

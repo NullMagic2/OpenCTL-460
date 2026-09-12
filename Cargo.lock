@@ -41,7 +41,7 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "ctl460-rust"
-version = "0.3.5"
+version = "0.3.21"
 dependencies = [
  "ctl460-wintab",
  "ctrlc",
@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "ctl460-wintab"
-version = "0.2.2"
+version = "0.3.10"
 dependencies = [
  "hidapi",
  "windows-sys",

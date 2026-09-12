@@ -31,12 +31,18 @@ pub struct Config {
     pub wobble_reduction: f64,
     pub preserve_aspect: bool,
     pub left_handed: bool,
+    /// Obsolete: accepted for old profiles, ignored and omitted on save.
+    #[serde(skip_serializing, deserialize_with = "ignore_legacy_speed_pressure")]
     pub virtual_tilt: bool,
+    /// Obsolete tilt limit; retained only for source/profile compatibility.
+    #[serde(skip_serializing, deserialize_with = "ignore_legacy_tilt_limit")]
     pub tilt_max_degrees: f64,
     /// Extra double-tap tolerance in primary-screen pixels; zero disables assistance.
     pub double_click_distance: u32,
     pub button1: String,
     pub button2: String,
+    /// Per-button Precision Hold movement gain for hover and drawing, in percent.
+    pub precision_gain: [f64; 2],
     pub backend: String,
     /// Compatibility report framing, changeable live while the pen is lifted.
     pub legacy_reports: bool,
@@ -53,9 +59,17 @@ pub struct Config {
     pub keep_advanced_smoothing: bool,
     /// Additional directional correction, independent of the base and artistic filters.
     pub circle_smoothing: f64,
+    /// Allow catch-up while resting or slowing and lightening the pen in contact.
+    pub endpoint_settling: bool,
+    /// Explicit drawing-only attraction to this stroke's start; never post-lift ink.
+    pub close_shapes: bool,
+    pub closure_radius_mm: f64,
+    pub show_start_marker: bool,
+    /// False retains the older combined guard for compatibility comparisons.
+    pub flowing_smoothing: bool,
     /// Protect deliberate corners and sustained small curves from combined smoothing.
     pub preserve_corners: bool,
-    /// Final contact displacement bound in tablet millimetres; zero disables the guard.
+    /// Base-filter displacement bound in flowing mode; legacy mode bounds all stages.
     pub max_smoothing_distance_mm: f64,
     /// Restored UI applies the individual artistic sliders after the base filter.
     pub independent_line_controls: bool,
@@ -92,10 +106,11 @@ impl Default for Config {
             preserve_aspect: true,
             left_handed: false,
             virtual_tilt: false,
-            tilt_max_degrees: 50.0,
+            tilt_max_degrees: 0.0,
             double_click_distance: 0,
             button1: "Right click".into(),
             button2: "None".into(),
+            precision_gain: [50.0; 2],
             backend: "ink".into(),
             legacy_reports: false,
             handwriting_mode: "off".into(),
@@ -103,6 +118,11 @@ impl Default for Config {
             pen_control: None,
             keep_advanced_smoothing: false,
             circle_smoothing: 0.0,
+            endpoint_settling: true,
+            close_shapes: false,
+            closure_radius_mm: 0.6,
+            show_start_marker: true,
+            flowing_smoothing: true,
             preserve_corners: true,
             max_smoothing_distance_mm: 1.0,
             independent_line_controls: false,
@@ -155,11 +175,17 @@ impl Config {
         preset.preserve_aspect = self.preserve_aspect;
         preset.button1 = self.button1.clone();
         preset.button2 = self.button2.clone();
+        preset.precision_gain = self.precision_gain;
         preset.backend = self.backend.clone();
         preset.legacy_reports = self.legacy_reports;
         preset.pen_control = self.pen_control;
         preset.keep_advanced_smoothing = self.keep_advanced_smoothing;
         preset.circle_smoothing = self.circle_smoothing;
+        preset.endpoint_settling = self.endpoint_settling;
+        preset.close_shapes = self.close_shapes;
+        preset.closure_radius_mm = self.closure_radius_mm;
+        preset.show_start_marker = self.show_start_marker;
+        preset.flowing_smoothing = self.flowing_smoothing;
         preset.preserve_corners = self.preserve_corners;
         preset.max_smoothing_distance_mm = self.max_smoothing_distance_mm;
         preset.independent_line_controls = self.independent_line_controls;
@@ -178,7 +204,25 @@ impl Config {
             .zip([&self.button1, &self.button2])
             .any(|(pressed, action)| pressed && action == "Erase (hold)")
     }
+    /// One rising button edge toggles the mode; simultaneous buttons use the finer gain.
+    pub fn button_precision(&self, states: [bool; 2]) -> Option<f64> {
+        states
+            .into_iter()
+            .zip([&self.button1, &self.button2])
+            .enumerate()
+            .filter_map(|(i, (pressed, action))| {
+                (pressed && action == "Precision Hold").then_some(self.precision_gain[i] / 100.0)
+            })
+            .reduce(f64::min)
+    }
     pub fn validate(&self) -> Result<(), String> {
+        if self
+            .precision_gain
+            .iter()
+            .any(|g| !g.is_finite() || !(10.0..=100.0).contains(g))
+        {
+            return Err("precision_gain must contain two finite percentages within 10..100".into());
+        }
         if !self.circle_smoothing.is_finite() || !(0.0..=100.0).contains(&self.circle_smoothing) {
             return Err("circle_smoothing must be finite and within 0..100".into());
         }
@@ -218,6 +262,7 @@ impl Config {
                 0.0,
                 5.0,
             ),
+            ("closure_radius_mm", self.closure_radius_mm, 0.1, 2.0),
             ("wobble_reduction", self.wobble_reduction, 0.0, 100.0),
             ("streamline_amount", self.streamline_amount, 0.0, 100.0),
             ("streamline_pressure", self.streamline_pressure, 0.0, 100.0),
@@ -251,7 +296,6 @@ impl Config {
                 120.0,
             ),
             ("stroke_beta", self.stroke_beta, 0.0, 10.0),
-            ("tilt_max_degrees", self.tilt_max_degrees, 0.0, 60.0),
         ] {
             if !value.is_finite() || !(low..=high).contains(&value) {
                 return Err(format!("{name} must be finite and within {low}..={high}"));
@@ -293,6 +337,7 @@ pub const BUTTON_ACTIONS: &[&str] = &[
     "None",
     "Right click",
     "Erase (hold)",
+    "Precision Hold",
     "Undo (Ctrl+Z)",
     "Redo (Ctrl+Y)",
     "Eraser (E)",
@@ -302,3 +347,7 @@ pub const BUTTON_ACTIONS: &[&str] = &[
     "Middle click",
     "Double click",
 ];
+
+fn ignore_legacy_tilt_limit<'de, D: serde::Deserializer<'de>>(input: D) -> Result<f64, D::Error> {
+    f64::deserialize(input).map(|_| 0.0)
+}

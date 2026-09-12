@@ -49,7 +49,7 @@ the feeder's configured rate (60-500 Hz, default 250 Hz), rather than an unhonor
 
 The CTL-460 does not measure tilt, rotation, Z or tangent pressure. Their standard packet
 fields remain valid to request: unsupported physical quantities return neutral values.
-Orientation contains explicitly simulated tilt only when enabled in OpenCTL. Eraser input
+Orientation is neutral; automatic tilt has been removed. Eraser input
 uses the configured side-button action; the pen has no measured rear eraser sensor.
 
 ## Unsupported optional capabilities

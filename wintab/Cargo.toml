@@ -1,7 +1,7 @@
 # Builds the same WinTab ABI provider for 32-bit and 64-bit applications.
 [package]
 name = "ctl460-wintab"
-version = "0.2.2"
+version = "0.3.10"
 edition = "2021"
 license = "MIT"
 autotests = false

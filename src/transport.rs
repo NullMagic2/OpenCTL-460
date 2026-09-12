@@ -387,6 +387,7 @@ pub fn execute(opts: &Options, mut config: Config) -> Result<(), String> {
                         let processed = engine.tick(start.elapsed().as_secs_f64() * 1000.0);
                         // Submit each transition immediately; timer ticks add intermediate pressure.
                         if let Some(sink) = ink.as_mut() {
+                            sink.set_precision(&output_config, held_buttons);
                             sink.submit(processed)?;
                             // Position the pen first so a side-button click uses this report location.
                             buttons.update(held_buttons)?;
@@ -429,6 +430,8 @@ pub fn execute(opts: &Options, mut config: Config) -> Result<(), String> {
                     let frame = engine.tick(start.elapsed().as_secs_f64() * 1000.0);
                     if !frame.in_range {
                         buttons.update([false, false])?;
+                        held_buttons = [false; 2];
+                        sink.set_precision(&output_config, [false; 2]);
                     }
                     sink.submit(frame)?;
                 }

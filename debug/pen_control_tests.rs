@@ -94,6 +94,8 @@ fn steadier_settings_reduce_noisy_curve_error_without_collapsing_clean_loops() {
 #[test]
 fn control_bounds_the_whole_pipeline_and_leaves_pressure_independent() {
     let mut c = config(100.0);
+    c.flowing_smoothing = false;
+    c.endpoint_settling = false;
     c.streamline_amount = 100.0;
     c.stabilization_amount = 100.0;
     c.motion_filter_amount = 100.0;

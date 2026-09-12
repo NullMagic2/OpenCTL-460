@@ -8,7 +8,6 @@ use crate::{
     line_smoothing::LineSmoothing,
     protocol::{Sample, MAX_X, MAX_Y},
     stroke::StrokeFilter,
-    tilt::VirtualTilt,
     wobble::WobbleFilter,
     writing_filter::WritingFilter,
 };
@@ -53,12 +52,13 @@ pub struct Engine {
     ramp_start: f64,
     stroke: StrokeFilter,
     pen_control: crate::pen_control::PenControl,
+    straight: crate::straight_assist::StraightAssist,
     circle_control: crate::pen_control::CircleControl,
     writing_filter: WritingFilter,
     wobble: WobbleFilter,
     line: LineSmoothing,
+    release_settling: crate::endpoint_settling::ReleaseSettling,
     guard: crate::smoothing_guard::SmoothingGuard,
-    tilt: VirtualTilt,
     handwriting: HandwritingDetector,
     ramp_ms: f64,
 }
@@ -79,12 +79,13 @@ impl Engine {
             ramp_start: 0.0,
             stroke: StrokeFilter::default(),
             pen_control: crate::pen_control::PenControl::default(),
+            straight: crate::straight_assist::StraightAssist::default(),
             circle_control: crate::pen_control::CircleControl::default(),
             writing_filter: WritingFilter::default(),
             wobble: WobbleFilter::default(),
             line: LineSmoothing::default(),
+            release_settling: Default::default(),
             guard: crate::smoothing_guard::SmoothingGuard::default(),
-            tilt: VirtualTilt::default(),
             handwriting: HandwritingDetector::default(),
         })
     }
@@ -128,11 +129,13 @@ impl Engine {
         self.ramp_to = 0.0;
         self.stroke.reset();
         self.pen_control.reset();
+        self.release_settling.reset();
+        self.straight.reset();
         self.circle_control.reset();
         self.writing_filter.reset();
         self.line.reset();
+
         self.guard.reset();
-        self.tilt.reset();
         self.frame.tilt_x = 0;
         self.frame.tilt_y = 0;
     }
@@ -209,6 +212,12 @@ impl Engine {
             return Ok(());
         }
         if !had_contact {
+            // The first contact lands on the measured point, not a lagging hover.
+            if sample.position_valid {
+                self.frame.x = sample.x;
+                self.frame.y = sample.y;
+                self.wobble.reset();
+            }
             self.frame.handwriting = self.config.handwriting_mode == "on"
                 || (self.config.handwriting_mode == "auto" && self.handwriting.likely());
             self.ramp_ms = if self.frame.handwriting {
@@ -227,9 +236,13 @@ impl Engine {
             ) {
                 // Keep force/contact intact; discard only stale position history
                 // at a deliberate corner so the old path cannot pull the pen back.
-                self.line.reset();
+                if !self.config.flowing_smoothing {
+                    self.line.reset();
+                }
                 self.stroke.reset();
                 self.pen_control.reset();
+                self.release_settling.reset();
+                self.straight.reset();
                 self.writing_filter.reset();
                 self.circle_control.reset();
                 self.wobble.reset();
@@ -279,18 +292,55 @@ impl Engine {
             self.frame.x = x;
             self.frame.y = y;
         }
-        // Force determines width. Position, velocity and synthetic tilt never substitute pressure.
+        // Normal pen processing: learn only sufficiently straight contact paths.
+        // Existing raw/off settings remain bypasses; Precision Hold is independent.
+        if sample.position_valid {
+            if self.config.stroke_smoothing
+                && self.config.pen_control.is_none_or(|amount| amount > 0.0)
+                && !self.frame.handwriting
+                && !self.frame.eraser
+                && !self.frame.barrel
+            {
+                let p = self
+                    .straight
+                    .update((f64::from(self.frame.x), f64::from(self.frame.y)), 0.5);
+                self.frame.x = p.0.round().clamp(0.0, f64::from(MAX_X)) as u16;
+                self.frame.y = p.1.round().clamp(0.0, f64::from(MAX_Y)) as u16;
+            } else {
+                self.straight.reset();
+            }
+        }
+        if sample.position_valid
+            && self.config.flowing_smoothing
+            && self.config.max_smoothing_distance_mm > 0.0
+        {
+            (self.frame.x, self.frame.y) = self
+                .guard
+                .constrain((sample.x, sample.y), (self.frame.x, self.frame.y));
+        }
+        // Force determines width. Position and velocity never substitute pressure.
         let target = self.config.curve(sample.pressure);
         // User-selected artistic controls follow the adaptive drawing/handwriting
         // stage in both modes. Their extra displacement is deliberate and is not
         // constrained by the handwriting stage's own 0.12 mm jitter-filter bound.
-        // The final guard below bounds the combined contact displacement.
+        // In flowing mode the guard constrains only the base stage above.
         if sample.position_valid
-            && (!single_writing_filter || self.config.independent_line_controls)
+            && (self.config.flowing_smoothing
+                || !single_writing_filter
+                || self.config.independent_line_controls)
         {
+            let finishing = self
+                .release_settling
+                .update(sample.x, sample.y, sample.pressure, dt);
+            let finishing =
+                if self.config.endpoint_settling && !self.frame.eraser && !self.frame.barrel {
+                    finishing
+                } else {
+                    0.0
+                };
             (self.frame.x, self.frame.y) =
                 self.line
-                    .update(self.frame.x, self.frame.y, dt, &self.config);
+                    .update_finishing(self.frame.x, self.frame.y, dt, &self.config, finishing);
         }
         if sample.position_valid && self.config.circle_smoothing > 0.0 {
             let (dx, dy) = self.circle_control.correction(
@@ -302,7 +352,10 @@ impl Engine {
             self.frame.x = (i32::from(self.frame.x) + dx).clamp(0, i32::from(MAX_X)) as u16;
             self.frame.y = (i32::from(self.frame.y) + dy).clamp(0, i32::from(MAX_Y)) as u16;
         }
-        if sample.position_valid && self.config.max_smoothing_distance_mm > 0.0 {
+        if sample.position_valid
+            && !self.config.flowing_smoothing
+            && self.config.max_smoothing_distance_mm > 0.0
+        {
             (self.frame.x, self.frame.y) = self
                 .guard
                 .constrain((sample.x, sample.y), (self.frame.x, self.frame.y));
@@ -349,18 +402,6 @@ impl Engine {
         };
         self.ramp_to = self.filtered;
         self.ramp_start = now_ms;
-        self.frame.virtual_tilt = self.config.virtual_tilt && !self.frame.handwriting;
-        if self.frame.virtual_tilt && sample.position_valid {
-            let (x, y) = self.tilt.update(
-                sample.x,
-                sample.y,
-                self.filtered,
-                dt,
-                self.config.tilt_max_degrees,
-            );
-            self.frame.tilt_x = x;
-            self.frame.tilt_y = y;
-        }
         Ok(())
     }
 

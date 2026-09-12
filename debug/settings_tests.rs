@@ -68,7 +68,7 @@ fn pencil_preset_keeps_current_mapping_and_shortcuts() {
     assert!(applied.left_handed);
     assert_eq!(applied.backend, "hid");
     assert_eq!(applied.button1, current.button1);
-    assert!(applied.virtual_tilt);
+    assert!(!applied.virtual_tilt);
 }
 
 #[test]

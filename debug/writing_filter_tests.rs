@@ -17,6 +17,8 @@ fn config(mode: &str) -> Config {
 fn total_displacement_is_bounded_through_the_real_engine() {
     for trace in fixtures::fixtures() {
         let mut c = config("responsive");
+        c.flowing_smoothing = false;
+        c.endpoint_settling = false;
         c.streamline_amount = 100.0;
         c.stabilization_amount = 100.0;
         c.motion_filter_amount = 100.0;

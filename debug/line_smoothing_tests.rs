@@ -416,6 +416,8 @@ fn motion_filter_rejects_short_wavelengths_and_limits_broad_curve_gain() {
 fn motion_filter_keeps_millimetre_loops_and_has_a_bounded_error() {
     for radius in [100.0, 250.0, 1000.0] {
         let c = Config {
+            flowing_smoothing: false,
+            endpoint_settling: false,
             motion_filter_amount: 70.0,
             ..Config::default()
         };
@@ -445,6 +447,8 @@ fn motion_filter_keeps_millimetre_loops_and_has_a_bounded_error() {
 #[test]
 fn motion_filter_cannot_ring_past_a_reversal_or_drift_at_rest() {
     let c = Config {
+        flowing_smoothing: false,
+        endpoint_settling: false,
         motion_filter_amount: 100.0,
         ..Config::default()
     };

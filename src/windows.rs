@@ -118,14 +118,7 @@ impl Ink {
                 ..Default::default()
             },
             penFlags: pen_flags,
-            penMask: PEN_MASK_PRESSURE
-                | if frame.virtual_tilt {
-                    PEN_MASK_TILT_X | PEN_MASK_TILT_Y
-                } else {
-                    0
-                },
-            tiltX: frame.tilt_x.clamp(-60, 60),
-            tiltY: frame.tilt_y.clamp(-60, 60),
+            penMask: PEN_MASK_PRESSURE,
             pressure: if frame.contact {
                 frame.ink_pressure()
             } else {

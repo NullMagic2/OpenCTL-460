@@ -16,23 +16,8 @@ pub fn encode(frame: Frame) -> [u8; REPORT_LEN] {
     let y = frame.y.min(MAX_Y).to_le_bytes();
     let p = if contact { frame.virtual_pressure() } else { 0 }.to_le_bytes();
     [
-        1,
-        flags,
-        x[0],
-        x[1],
-        y[0],
-        y[1],
-        p[0],
-        p[1],
-        if frame.virtual_tilt {
-            frame.tilt_x.clamp(-60, 60) as i8 as u8
-        } else {
-            0
-        },
-        if frame.virtual_tilt {
-            frame.tilt_y.clamp(-60, 60) as i8 as u8
-        } else {
-            0
-        },
+        1, flags, x[0], x[1], y[0], y[1], p[0], p[1],
+        // Reserved tilt bytes stay zero; preserve the installed HID contract.
+        0, 0,
     ]
 }

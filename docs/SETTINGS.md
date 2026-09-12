@@ -22,7 +22,7 @@ and hiding checks run when Explorer is available.
 From 0.1.14, measured tip pressure controls stroke thickness again. The same measured
 pressure produces the same target output through the selected curve, regardless of
 stroke speed or direction. Pressing harder/lighter retains deliberate thick/thin control.
-The speed-driven pressure introduced in 0.1.11–0.1.13 is removed. Its old speed_pressure
+The speed-driven pressure introduced in 0.1.11ï¿½0.1.13 is removed. Its old speed_pressure
 setting is accepted for upgrade compatibility, ignored, and omitted when settings are saved.
 No mode switch or manual configuration edit is required.
 
@@ -33,9 +33,7 @@ force falls. Lift releases immediately without a trailing synthetic stroke. Smoo
 can briefly lag a pressure change, and cannot recover force changes absent from USB reports.
 
 Both drawing and handwriting use this pressure response. Handwriting retains its lower
-base pressure timing limits and applies the artistic smoothing sliders afterward. Simulated tilt does not alter
-pressure output; an application's tilt-aware brush can still change its footprint with
-orientation. Texture and other application brush dynamics remain application-controlled.
+base pressure timing limits and applies the artistic smoothing sliders afterward. Automatic tilt has been removed. Texture and other application brush dynamics remain application-controlled.
 
 A continuous mapped-pressure decrease of at least 3% uses at most a 2 ms filter
 time constant and no additional interpolation ramp. Small alternating fluctuations

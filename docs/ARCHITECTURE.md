@@ -40,7 +40,7 @@ it excludes USB polling, display, rendering, WinTab polling and application sche
 WinTab X/Y now describe the same normalized primary-screen position as the HID output. The shared
 screen mapping applies aspect preservation once before publication, while WinTab contexts retain
 their own requested output extents. This prevents the Windows cursor and app pen coordinates from
-using different aspect mappings. Simulated tilt changes only orientation, never the tip's X/Y.
+using different aspect mappings. Automatic tilt is removed; orientation output stays neutral.
 
 Per-application input selection is handled by the application. The driver does not inject a
 second drawing event into a program just because both APIs are available. WinTab delivery to
@@ -62,3 +62,8 @@ lag. Obsolete speed_pressure configuration keys are ignored on loading older set
 References: [Microsoft VHF](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/virtual-hid-framework--vhf-),
 [Windows pen pressure](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-pointer_pen_info),
 [Wacom WinTab reference](https://developer-docs.wacom.com/docs/icbt/windows/wintab/wintab-reference/).
+
+
+## Drawing controls in 0.3.8
+
+See [release notes](RELEASE-0.3.8.md) for endpoint settling, shape closure, the start marker, and the strengthened artistic smoothing pipeline.

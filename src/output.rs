@@ -74,12 +74,19 @@ pub struct Output {
     raw: i32,
     latency: u32,
     received: Option<std::time::Instant>,
+    shape_epoch: std::time::Instant,
     width: i32,
     height: i32,
     aspect: bool,
     taps: DoubleClick,
     distance: u32,
     previous: Frame,
+    precision: ctl460_rust::precision::PrecisionHold,
+    shape: ctl460_rust::shape_assist::ShapeAssist,
+    shape_config: Config,
+    marker: Option<ctl460_rust::start_marker::StartMarker>,
+    marker_point: Option<(i32, i32)>,
+    marker_foreground: isize,
     system_cursor: wintab32::system_output::SystemCursor,
     system_buttons: wintab32::system_output::SystemButtons,
     input_route: wintab32::system_output::InputRoute,
@@ -106,12 +113,23 @@ impl Output {
             raw: 0,
             latency: 0,
             received: None,
+            shape_epoch: std::time::Instant::now(),
             width: unsafe { GetSystemMetrics(SM_CXSCREEN) },
             height: unsafe { GetSystemMetrics(SM_CYSCREEN) },
             aspect: c.preserve_aspect,
             taps: DoubleClick::default(),
             distance: c.double_click_distance,
             previous: Frame::default(),
+            precision: Default::default(),
+            shape: Default::default(),
+            shape_config: c.clone(),
+            marker: if c.show_start_marker {
+                Some(ctl460_rust::start_marker::StartMarker::new()?)
+            } else {
+                None
+            },
+            marker_point: None,
+            marker_foreground: 0,
             system_cursor: Default::default(),
             system_buttons: Default::default(),
             input_route: Default::default(),
@@ -124,6 +142,12 @@ impl Output {
         if self.previous.contact {
             return Err("Lift the pen before changing output".into());
         }
+        // Allocate an optional overlay before changing any live output state.
+        let new_marker = if c.show_start_marker && self.marker.is_none() {
+            Some(ctl460_rust::start_marker::StartMarker::new()?)
+        } else {
+            None
+        };
         let backend = if c.backend == "hid" { 1 } else { 2 };
         if self.backend != backend {
             let replacement = if backend == 1 {
@@ -159,6 +183,18 @@ impl Output {
         self.handwriting_mode_flags = PenData::handwriting_mode_flags(&c.handwriting_mode);
         self.distance = c.double_click_distance;
         self.taps = DoubleClick::default();
+        self.precision.reconfigure(c);
+        self.shape.reset();
+        self.shape_config = c.clone();
+        self.marker_point = None;
+        if let Some(marker) = &self.marker {
+            marker.show(None, 0);
+        }
+        if let Some(marker) = new_marker {
+            self.marker = Some(marker);
+        } else if !c.show_start_marker {
+            self.marker = None;
+        }
         Ok(())
     }
 
@@ -170,7 +206,19 @@ impl Output {
         self.stream.set_metadata(self.backend, self.hz, 0);
         self.stream.heartbeat();
     }
+    pub fn set_precision(&mut self, config: &Config, states: [bool; 2]) {
+        self.precision.buttons(config, states);
+    }
     pub fn submit(&mut self, frame: Frame) -> Result<(), String> {
+        let was_precision = self.precision.active();
+        let frame = self.precision.apply(
+            frame,
+            ctl460_rust::precision::output_bounds(self.width, self.height, self.aspect),
+        );
+        let precision = was_precision || self.precision.active();
+        if precision {
+            self.taps = DoubleClick::default();
+        }
         let screen = ctl460_rust::stroke::map_to_screen(
             frame.x,
             frame.y,
@@ -182,9 +230,13 @@ impl Output {
             frame,
             screen,
             unsafe { GetTickCount64() },
-            self.distance,
+            if precision { 0 } else { self.distance },
             unsafe { GetDoubleClickTime() },
         );
+        let measured_ms = self.received.map_or(0.0, |t| {
+            t.saturating_duration_since(self.shape_epoch).as_secs_f64() * 1000.0
+        });
+        let frame = self.shape.apply(frame, &self.shape_config, measured_ms);
         // All backends see the old tool lift and leave before the eraser/pen replaces it.
         // This also prevents a held eraser button from becoming an ordinary drawing stroke.
         if self.previous.in_range && frame.in_range && self.previous.eraser != frame.eraser {
@@ -231,6 +283,40 @@ impl Output {
             desktop,
             (cursor.x, cursor.y),
         );
+        let marker_eligible =
+            frame.in_range && frame.contact && !frame.handwriting && !frame.eraser && !frame.barrel;
+        if marker_eligible {
+            if self.marker_point.is_none() {
+                self.marker_point = Some(position.unwrap_or_else(|| {
+                    if self.backend == 2 {
+                        ctl460_rust::stroke::map_to_screen(
+                            frame.x,
+                            frame.y,
+                            self.width,
+                            self.height,
+                            self.aspect,
+                        )
+                    } else {
+                        (
+                            desktop[0]
+                                + (f64::from(mapped_x) / 14720.0
+                                    * f64::from((desktop[2] - 1).max(1)))
+                                .round() as i32,
+                            desktop[1]
+                                + (f64::from(mapped_y) / 9200.0
+                                    * f64::from((desktop[3] - 1).max(1)))
+                                .round() as i32,
+                        )
+                    }
+                }));
+                self.marker_foreground = unsafe { GetForegroundWindow() } as isize;
+            }
+        } else {
+            self.marker_point = None;
+        }
+        if let Some(marker) = &self.marker {
+            marker.show(self.marker_point, self.marker_foreground);
+        }
         let mouse_route = self.input_route.update(
             wintab32::system_output::foreground_requests_system_pen(),
             frame.contact,
@@ -264,7 +350,6 @@ impl Output {
             | (i32::from(frame.barrel) << 1)
             | (i32::from(frame.eraser) << 2)
             | (i32::from(frame.in_range) << 3)
-            | (i32::from(frame.virtual_tilt) << 4)
             | (i32::from(frame.handwriting) << 5)
             | (i32::from(frame.handwriting_score) << 8)
             | self.handwriting_mode_flags;
@@ -281,8 +366,8 @@ impl Output {
             y: i32::from(y),
             pressure: i32::from(frame.virtual_pressure()),
             flags,
-            tilt_x: frame.tilt_x,
-            tilt_y: frame.tilt_y,
+            tilt_x: 0,
+            tilt_y: 0,
             raw: self.raw,
         });
         // Make tablet data available before dispatching the corresponding system

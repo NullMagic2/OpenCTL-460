@@ -9,6 +9,12 @@ fn main() {
 }
 
 #[cfg(windows)]
+#[path = "../gui_calibration_canvas.rs"]
+mod calibration_canvas;
+#[cfg(windows)]
+#[path = "../gui_profile_file.rs"]
+mod profile_file;
+#[cfg(windows)]
 #[path = "../gui_prompt.rs"]
 mod prompt;
 #[cfg(windows)]
@@ -26,7 +32,9 @@ mod visuals;
 
 #[cfg(windows)]
 mod app {
-    use super::{prompt, shortcut_prompt, startup, tray, visuals};
+    use super::{
+        calibration_canvas, profile_file, prompt, shortcut_prompt, startup, tray, visuals,
+    };
     use ctl460_rust::pressure_profiles::{Library, Shape};
     use ctl460_rust::{
         config::{Config, BUTTON_ACTIONS},
@@ -43,7 +51,9 @@ mod app {
     use windows_sys::Win32::{
         Foundation::*,
         Graphics::Gdi::*,
-        System::{LibraryLoader::GetModuleHandleW, Threading::*},
+        System::{
+            LibraryLoader::GetModuleHandleW, SystemInformation::GetTickCount64, Threading::*,
+        },
         UI::{
             Controls::*,
             HiDpi::*,
@@ -62,7 +72,6 @@ mod app {
     const SMOOTH: i32 = 121;
     const RAMP: i32 = 122;
     const STROKE: i32 = 123;
-    const TILT: i32 = 124;
     const LEFT: i32 = 125;
     const RIGHT: i32 = 215;
     const ASPECT: i32 = 126;
@@ -71,7 +80,9 @@ mod app {
     const B2: i32 = 131;
     const SHORTCUT1: i32 = 240;
     const SHORTCUT2: i32 = 241;
-    const TILTMAX: i32 = 132;
+    const PRECISION: i32 = 700;
+    const PRECISION_LABEL: i32 = 702;
+    const SHORTCUT_LABEL: i32 = 704;
     const STATUS: i32 = 150;
     const FLOOR: i32 = 160;
     const CEILING: i32 = 161;
@@ -90,6 +101,11 @@ mod app {
     const PREVIEW_CURVE: u32 = WM_APP + 20;
     // commctrl.h defines TBM_GETPOS as WM_USER; windows-sys omits this alias.
     const TBM_GETPOS: u32 = WM_USER;
+    const ENDPOINT: i32 = 710;
+    const CLOSE_SHAPES: i32 = 711;
+    const START_MARKER: i32 = 712;
+    const CLOSURE_RADIUS: i32 = 713;
+    const FLOWING: i32 = 714;
     const LINE_IDS: [i32; 7] = [180, 181, 182, 183, 184, 185, 186];
     const PRESETS: &[(&str, &str)] = &[
         (
@@ -105,7 +121,7 @@ mod app {
             include_str!("../../profiles/raw.toml"),
         ),
         (
-            "Pencil - simulated tilt",
+            "Pencil",
             include_str!("../../profiles/pencil_experimental.toml"),
         ),
         (
@@ -310,9 +326,10 @@ mod app {
         minimize_requested: bool,
         auto_start: bool,
         start_pending: bool,
+        startup_wait: ctl460_rust::startup_wait::StartupWait,
         count: usize,
         paths: Vec<String>,
-        pages: [Vec<HWND>; 5],
+        pages: [Vec<HWND>; 7],
         font: HFONT,
         bold_font: HFONT,
         title_font: HFONT,
@@ -321,7 +338,11 @@ mod app {
         layout: Vec<(HWND, RECT)>,
         pressure_library: Library,
         pressure_draft: Shape,
+        calibration: CalibrationPage,
     }
+    include!("../gui_calibration.rs");
+    #[cfg(test)]
+    include!("../../debug/calibration_gui_tests.rs");
     impl Drop for State {
         fn drop(&mut self) {
             if !self.title_font.is_null() {
@@ -369,6 +390,39 @@ mod app {
                     }
                 }
                 InvalidateRect(w, null(), 1);
+            }
+            self.precision_controls(w);
+            if selected == 6 {
+                self.calibration_preview(w);
+            }
+        }
+        fn precision_controls(&self, w: HWND) {
+            let page = message(w, PAGE, TCM_GETCURSEL, 0, 0) == 1;
+            for (i, id) in [B1, B2].into_iter().enumerate() {
+                let selected = BUTTON_ACTIONS.get(message(w, id, CB_GETCURSEL, 0, 0) as usize)
+                    == Some(&"Precision Hold");
+                unsafe {
+                    for control_id in [PRECISION + i as i32, PRECISION_LABEL + i as i32] {
+                        ShowWindow(
+                            control(w, control_id),
+                            if page && selected { SW_SHOW } else { SW_HIDE },
+                        );
+                    }
+                    for control_id in [SHORTCUT1 + i as i32, SHORTCUT_LABEL + i as i32] {
+                        ShowWindow(
+                            control(w, control_id),
+                            if page && !selected { SW_SHOW } else { SW_HIDE },
+                        );
+                    }
+                }
+                text(
+                    w,
+                    PRECISION_LABEL + i as i32,
+                    &format!(
+                        "Movement reduction: {}%",
+                        message(w, PRECISION + i as i32, TBM_GETPOS, 0, 0)
+                    ),
+                );
             }
         }
         fn line_labels(&self, w: HWND) {
@@ -479,9 +533,17 @@ mod app {
                 [220, 90, 780, 35],
                 WS_TABSTOP | TCS_FOCUSONBUTTONDOWN,
             )?;
-            for (index, title) in ["Pen", "Buttons", "Mapping", "Line smoothing", "Advanced"]
-                .iter()
-                .enumerate()
+            for (index, title) in [
+                "Pen",
+                "Buttons",
+                "Mapping",
+                "Line smoothing",
+                "Advanced",
+                "Drawing aids",
+                "Calibration",
+            ]
+            .iter()
+            .enumerate()
             {
                 let mut title = wide(title);
                 let item = TCITEMW {
@@ -709,7 +771,7 @@ mod app {
             for (i, (title, help)) in [
                 (
                     "StreamLine - Line shape",
-                    "Smooth the path; higher values add lag.",
+                    "Smooth lines and curves; high values add lag.",
                 ),
                 (
                     "StreamLine - Pressure",
@@ -825,7 +887,6 @@ mod app {
                 (PRESS_OFF, "Stop ink at (0-1022)"),
                 (SMOOTH, "Pressure smoothing (ms)"),
                 (RAMP, "Pressure interpolation (ms)"),
-                (TILTMAX, "Simulated tilt limit (degrees)"),
             ]
             .iter()
             .enumerate()
@@ -839,7 +900,6 @@ mod app {
                     232,
                 )?;
             }
-            Self::checkbox(w, TILT, "Simulate tilt from stroke motion", 240, 397, 700)?;
             Self::checkbox(
                 w,
                 LEGACY,
@@ -866,6 +926,84 @@ mod app {
             )?;
             self.record_page(w, 4, &before);
             let before = Self::children(w);
+            Self::checkbox(
+                w,
+                ENDPOINT,
+                "Settle endpoints when pausing or finishing",
+                240,
+                155,
+                750,
+            )?;
+            label(
+                w,
+                "Catches up while touching; pen lift still ends ink immediately.",
+                240,
+                190,
+                750,
+            )?;
+            Self::checkbox(
+                w,
+                CLOSE_SHAPES,
+                "Pause near the start to close a shape",
+                240,
+                245,
+                750,
+            )?;
+            label(
+                w,
+                "Only after a loop returns near its start; never for handwriting or erasing.",
+                240,
+                280,
+                750,
+            )?;
+            Self::edit(
+                w,
+                CLOSURE_RADIUS,
+                "Closure distance (tablet mm, 0.1-2.0)",
+                240,
+                320,
+                500,
+            )?;
+            Self::checkbox(
+                w,
+                START_MARKER,
+                "Show the stroke-start marker while drawing",
+                240,
+                420,
+                750,
+            )?;
+            label(
+                w,
+                "A click-through crosshair marks where the stroke began.",
+                240,
+                455,
+                750,
+            )?;
+            Self::checkbox(
+                w,
+                FLOWING,
+                "Allow strong artistic smoothing on lines and curves",
+                240,
+                510,
+                750,
+            )?;
+            label(
+                w,
+                "At high values, artistic smoothing rounds corners and adds lag.",
+                240,
+                545,
+                750,
+            )?;
+            label(
+                w,
+                "For closure and the marker, set Handwriting assistance to Off.",
+                240,
+                605,
+                750,
+            )?;
+            self.record_page(w, 5, &before);
+            let before = Self::children(w);
+
             add(
                 w,
                 "CTL460SunkenPanel",
@@ -921,7 +1059,32 @@ mod app {
                 )?;
                 label(w, title, 438, y + 12, 545)?;
                 combo(w, id, &actions, 438, y + 48, 548)?;
-                label(w, "Keyboard shortcut", 438, y + 92, 200)?;
+                add(
+                    w,
+                    "STATIC",
+                    "Keyboard shortcut",
+                    SHORTCUT_LABEL + i as i32,
+                    [438, y + 92, 210, 24],
+                    0,
+                )?;
+                add(
+                    w,
+                    "STATIC",
+                    "",
+                    PRECISION_LABEL + i as i32,
+                    [438, y + 92, 210, 24],
+                    0,
+                )?;
+                add(
+                    w,
+                    "msctls_trackbar32",
+                    "",
+                    PRECISION + i as i32,
+                    [648, y + 88, 338, 30],
+                    WS_TABSTOP | TBS_AUTOTICKS,
+                )?;
+                message(w, PRECISION + i as i32, TBM_SETRANGE, 1, 90 << 16);
+                message(w, PRECISION + i as i32, TBM_SETTICFREQ, 10, 0);
                 add(
                     w,
                     "BUTTON",
@@ -947,6 +1110,7 @@ mod app {
                 590,
             )?;
             self.record_page(w, 1, &before);
+            self.calibration_controls(w)?;
             // Decoration is a sibling, not a container: keep its large rectangle behind inputs.
             unsafe {
                 for id in 300..=310 {
@@ -976,6 +1140,7 @@ mod app {
             self.show_page(w);
             unsafe {
                 SetTimer(w, 1, 150, None);
+                SetTimer(w, 4, 16, None);
             }
             Ok(())
         }
@@ -1157,6 +1322,7 @@ mod app {
             );
         }
         fn pressure_list(&self, w: HWND) {
+            self.calibration_list(w);
             message(w, 230, CB_RESETCONTENT, 0, 0);
             for name in ["Default", "Unsaved copy"].into_iter().chain(
                 self.pressure_library
@@ -1199,6 +1365,15 @@ mod app {
         }
         fn fill(&mut self, w: HWND) {
             self.pressure_list(w);
+            for i in 0..2 {
+                message(
+                    w,
+                    PRECISION + i as i32,
+                    TBM_SETPOS,
+                    1,
+                    100 - self.config.precision_gain[i].round() as isize,
+                );
+            }
             message(
                 w,
                 DOUBLE_DISTANCE,
@@ -1277,10 +1452,17 @@ mod app {
             text(w, GAMMA, &self.config.gamma.to_string());
             text(w, SMOOTH, &self.config.smoothing_ms.to_string());
             text(w, RAMP, &self.config.interpolation_ms.to_string());
-            text(w, TILTMAX, &self.config.tilt_max_degrees.to_string());
+            text(
+                w,
+                CLOSURE_RADIUS,
+                &self.config.closure_radius_mm.to_string(),
+            );
             for (id, on) in [
                 (STROKE, self.config.stroke_smoothing),
-                (TILT, self.config.virtual_tilt),
+                (ENDPOINT, self.config.endpoint_settling),
+                (CLOSE_SHAPES, self.config.close_shapes),
+                (START_MARKER, self.config.show_start_marker),
+                (FLOWING, self.config.flowing_smoothing),
                 (LEFT, self.config.left_handed),
                 (RIGHT, !self.config.left_handed),
                 (ASPECT, self.config.preserve_aspect),
@@ -1314,6 +1496,7 @@ mod app {
             self.button_controls(w);
         }
         fn button_controls(&mut self, w: HWND) {
+            self.precision_controls(w);
             for (index, (id, shortcut_id)) in
                 [(B1, SHORTCUT1), (B2, SHORTCUT2)].into_iter().enumerate()
             {
@@ -1336,6 +1519,9 @@ mod app {
                     245 + index as i32,
                     match action {
                         Some("Erase (hold)") => "Hold the pen button to erase; release it to draw.",
+                        Some("Precision Hold") => {
+                            "Click to toggle. Slows hover and drawing. Lift out of range to reposition."
+                        }
                         Some("Pan (hold Space)") => {
                             "Pan holds Space until you release the pen button."
                         }
@@ -1399,9 +1585,14 @@ mod app {
                 read(w, id)
                     .trim()
                     .parse::<f64>()
-                    .map_err(|_| "Enter a valid number in each pressure/tilt field".to_string())
+                    .map_err(|_| "Enter a valid number in each pressure field".to_string())
             };
             config.gamma = number(GAMMA)?;
+            config.endpoint_settling = checked(w, ENDPOINT);
+            config.close_shapes = checked(w, CLOSE_SHAPES);
+            config.show_start_marker = checked(w, START_MARKER);
+            config.flowing_smoothing = checked(w, FLOWING);
+            config.closure_radius_mm = number(CLOSURE_RADIUS)?;
             let integer = |id| {
                 read(w, id).trim().parse::<u16>().map_err(|_| {
                     "Pressure thresholds must be whole numbers from 0 to 1023".to_string()
@@ -1425,14 +1616,15 @@ mod app {
             .into();
             config.smoothing_ms = number(SMOOTH)?;
             config.interpolation_ms = number(RAMP)?;
-            config.tilt_max_degrees = number(TILTMAX)?;
             config.stroke_smoothing = checked(w, STROKE);
-            config.virtual_tilt = checked(w, TILT);
             config.double_click_distance = message(w, DOUBLE_DISTANCE, TBM_GETPOS, 0, 0) as u32;
             config.left_handed = checked(w, LEFT);
             config.preserve_aspect = checked(w, ASPECT);
             config.button1 = self.button_value(w, B1, SHORTCUT1)?;
             config.button2 = self.button_value(w, B2, SHORTCUT2)?;
+            config.precision_gain = std::array::from_fn(|i| {
+                100.0 - message(w, PRECISION + i as i32, TBM_GETPOS, 0, 0) as f64
+            });
             config.legacy_reports = checked(w, LEGACY);
             config.validate()?;
             let contents = format!(
@@ -1501,6 +1693,8 @@ mod app {
             }
         }
         fn start(&mut self, w: HWND) -> Result<(), String> {
+            self.start_pending = false;
+            self.startup_wait.cancel();
             if self.child.is_some() {
                 return Err("Stop the running driver before starting another.".into());
             }
@@ -1631,19 +1825,44 @@ mod app {
             }
             Ok(())
         }
-        fn stop(&self, w: HWND) {
+        fn stop(&mut self, w: HWND) {
+            let was_pending = self.start_pending;
+            self.start_pending = false;
+            self.startup_wait.cancel();
             if !self.event.is_null() {
                 unsafe {
                     SetEvent(self.event);
                 }
                 text(w, STATUS, "Stopping and releasing pen/buttons...");
+            } else if was_pending {
+                text(w, STATUS, "Automatic start cancelled.");
             }
         }
         fn poll(&mut self, w: HWND) {
-            // One attempt on opening/reopening, never a retry loop after Stop, failure or UAC cancellation.
-            if std::mem::take(&mut self.start_pending) && !self.closing && self.child.is_none() {
-                if let Err(e) = self.refresh(w).and_then(|()| self.start(w)) {
-                    text(w, STATUS, &format!("Automatic start: {e}"));
+            // At login USB enumeration may finish after Explorer launches us.
+            // Wait only for missing hardware; Stop or a real launch ends this window.
+            let now = std::time::Instant::now();
+            if self.start_pending
+                && self.startup_wait.due(now)
+                && !self.closing
+                && self.child.is_none()
+            {
+                let refreshed = self.refresh(w);
+                if refreshed.is_ok()
+                    && self.count == 0
+                    && self.startup_wait.defer_missing_device(now)
+                {
+                    text(
+                        w,
+                        STATUS,
+                        "Waiting for the tablet to become ready after Windows startup...",
+                    );
+                } else {
+                    self.start_pending = false;
+                    self.startup_wait.cancel();
+                    if let Err(e) = refreshed.and_then(|()| self.start(w)) {
+                        text(w, STATUS, &format!("Automatic start: {e}"));
+                    }
                 }
             }
             if self.hid_session && self.child.is_some() {
@@ -1652,17 +1871,7 @@ mod app {
                 }
             }
             if let Some(path) = self.preview.take() {
-                message(
-                    w,
-                    PAGE,
-                    TCM_SETCURSEL,
-                    if self.preview_page == 5 {
-                        3
-                    } else {
-                        self.preview_page
-                    },
-                    0,
-                );
+                message(w, PAGE, TCM_SETCURSEL, self.preview_page, 0);
                 self.show_page(w);
                 if let Err(e) = visuals::snapshot(w, &path) {
                     error(w, &e);
@@ -1772,9 +1981,127 @@ mod app {
                 );
                 return GetStockObject(DC_BRUSH) as isize;
             }
+            if msg == CAL_NOTICE {
+                let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
+                if !state.is_null() {
+                    let notice = (*state).calibration.notice.take();
+                    let next = (*state).calibration.continue_stage.take();
+                    if let Some(notice) = notice {
+                        let answer = MessageBoxW(
+                            w,
+                            wide(&notice).as_ptr(),
+                            wide("Pressure calibration").as_ptr(),
+                            MB_ICONINFORMATION | if next.is_some() { MB_OKCANCEL } else { MB_OK },
+                        );
+                        if answer == IDOK {
+                            let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
+                            if !state.is_null()
+                                && next.is_some_and(|stage| {
+                                    stage == (*state).calibration.session.stage
+                                })
+                            {
+                                if let Err(e) = (&mut *state).calibration_arm(w) {
+                                    error(w, &e);
+                                }
+                            }
+                        }
+                    }
+                }
+                return 0;
+            }
             if msg == WM_COMMAND {
                 let id = (wp & 0xffff) as i32;
                 let notification = (wp >> 16) & 0xffff;
+                if id == CAL_RECORD && notification == BN_CLICKED as usize {
+                    let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
+                    if state.is_null()
+                        || (*state).calibration.session.active
+                        || (*state).calibration.session.stage >= 3
+                    {
+                        return 0;
+                    }
+                    let stage = (*state).calibration.session.stage;
+                    let text = ctl460_rust::calibration::stage_prompt(stage);
+                    if MessageBoxW(
+                        w,
+                        wide(&text).as_ptr(),
+                        wide(&format!(
+                            "{} strokes - stage {} of 3",
+                            ctl460_rust::calibration::STAGES[stage],
+                            stage + 1
+                        ))
+                        .as_ptr(),
+                        MB_OKCANCEL | MB_ICONINFORMATION,
+                    ) == IDOK
+                    {
+                        let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
+                        if !state.is_null() {
+                            if let Err(e) = (&mut *state).calibration_arm(w) {
+                                error(w, &e);
+                            }
+                        }
+                    }
+                    return 0;
+                }
+                if [CAL_SAVE, CAL_IMPORT, CAL_EXPORT].contains(&id)
+                    && notification == BN_CLICKED as usize
+                {
+                    if IsWindowEnabled(control(w, id)) == 0 {
+                        return 0;
+                    }
+                    // Native modal dialogs pump timers. Never retain a State borrow across them.
+                    if id == CAL_SAVE {
+                        if let Some(name) = prompt::name(w) {
+                            let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
+                            if !state.is_null() {
+                                if let Err(e) = (&mut *state).calibration_save(w, &name) {
+                                    error(w, &e);
+                                }
+                            }
+                        }
+                    } else {
+                        let picked = profile_file::choose(w, id == CAL_EXPORT);
+                        let result = (|| -> Result<(), String> {
+                            let Some(path) = picked? else {
+                                return Ok(());
+                            };
+                            let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
+                            if state.is_null() {
+                                return Ok(());
+                            }
+                            let s = &mut *state;
+                            if id == CAL_IMPORT {
+                                use std::io::Read;
+                                let mut data = String::new();
+                                fs::File::open(path)
+                                    .map_err(|e| e.to_string())?
+                                    .take(65_537)
+                                    .read_to_string(&mut data)
+                                    .map_err(|e| e.to_string())?;
+                                let shape = ctl460_rust::calibration::import(&data)?;
+                                s.calibration.draft = Some(shape);
+                                s.calibration_preview(w);
+                                s.calibration_buttons(w);
+                                text(w,CAL_STATUS,"Profile imported. Apply calibration to use it, or Save as to keep it in your list.");
+                                text(w, CAL_SUMMARY, "Imported calibration. Not applied yet.");
+                            } else {
+                                let shape = s
+                                    .calibration
+                                    .draft
+                                    .clone()
+                                    .unwrap_or_else(|| Shape::from_config(&s.config));
+                                let data = ctl460_rust::calibration::export(&shape)?;
+                                ctl460_rust::live_config::write_atomic(&path, &data)?;
+                                text(w,CAL_STATUS,"Calibration profile exported. Import the .calibration_profile file to use it later.");
+                            }
+                            Ok(())
+                        })();
+                        if let Err(e) = result {
+                            error(w, &e);
+                        }
+                    }
+                    return 0;
+                }
                 if id == 233 && notification == BN_CLICKED as usize {
                     if let Some(name) = prompt::name(w) {
                         let state = GetWindowLongPtrW(w, GWLP_USERDATA) as *mut State;
@@ -1846,6 +2173,13 @@ mod app {
                     237,
                     244,
                     START_WINDOWS,
+                    CAL_RECORD,
+                    CAL_CANCEL,
+                    CAL_RESTART,
+                    CAL_APPLY,
+                    CAL_LOAD,
+                    CAL_UNDO,
+                    CAL_CLEAR,
                 ]
                 .contains(&id)
                     || [PROFILE, 230, B1, B2].contains(&id)
@@ -1864,6 +2198,7 @@ mod app {
                 tray::remove(w);
                 KillTimer(w, 1);
                 KillTimer(w, 2);
+                KillTimer(w, 4);
                 PostQuitMessage(0);
                 return 0;
             }
@@ -1971,6 +2306,8 @@ mod app {
                     let id = (wp & 0xffff) as i32;
                     let notification = (wp >> 16) & 0xffff;
                     let result = match id {
+                        CAL_RECORD | CAL_CANCEL | CAL_RESTART | CAL_APPLY | CAL_LOAD | CAL_UNDO
+                        | CAL_CLEAR => s.calibration_command(w, id),
                         START_WINDOWS => {
                             let result = startup::set(
                                 &s.root,
@@ -2148,6 +2485,7 @@ mod app {
                     0
                 }
                 WM_HSCROLL => {
+                    s.precision_controls(w);
                     if lp as HWND == control(w, SENSITIVITY) {
                         let old_gamma = s.config.gamma;
                         s.config.gamma = 0.2
@@ -2165,6 +2503,10 @@ mod app {
                     0
                 }
                 WM_TIMER => {
+                    if wp == 4 {
+                        s.calibration_poll(w);
+                        return 0;
+                    }
                     if !s.closing {
                         if let Err(e) = s.save(w) {
                             // A partially typed or invalid value never replaces valid settings.
@@ -2284,6 +2626,7 @@ mod app {
         let mut state = Box::new(State {
             pressure_library,
             pressure_draft,
+            calibration: Default::default(),
             root,
             settings,
             recording,
@@ -2299,6 +2642,10 @@ mod app {
             minimize_requested: false,
             auto_start: normal_launch || requested_start,
             start_pending: normal_launch || requested_start,
+            startup_wait: ctl460_rust::startup_wait::StartupWait::new(
+                std::time::Instant::now(),
+                startup_launch,
+            ),
             count: 0,
             paths: Vec::new(),
             pages: std::array::from_fn(|_| Vec::new()),
@@ -2311,8 +2658,8 @@ mod app {
                     .to_string_lossy()
                     .parse::<usize>()
                     .ok()
-                    .filter(|n| *n < 6)
-                    .ok_or("Preview page must be 0..5 (5 = advanced smoothing)")?
+                    .filter(|n| *n < 7)
+                    .ok_or("Preview page must be 0..6 (6 = Calibration)")?
             } else {
                 0
             },
@@ -2333,6 +2680,7 @@ mod app {
                 return Err("Cannot initialize smoothing sliders".into());
             }
             visuals::register()?;
+            calibration_canvas::register()?;
             let instance = GetModuleHandleW(null());
             let wc = WNDCLASSW {
                 lpfnWndProc: Some(procedure),

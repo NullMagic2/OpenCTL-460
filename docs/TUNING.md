@@ -13,7 +13,7 @@ button assignments and contact thresholds are retained. **Advanced** provides pr
 Graph changes save automatically and apply between strokes.
 
 **Mapping** holds handedness and aspect settings. **Line smoothing** holds artistic sliders and
-handwriting assistance. **Advanced** holds calibration, timing, simulated tilt and the output backend.
+handwriting assistance. **Advanced** holds calibration, timing and the output backend.
 
 | Control | Effect |
 |---|---|
@@ -56,7 +56,7 @@ modes; their intentional displacement is additional to the bounds above.
 
 These bounds limit spatial displacement, not end-to-end latency. There is no future-sample
 buffer and no extrapolation beyond the measured point. The app can still add its own smoothing.
-Handwriting mode suppresses artistic tilt so the simulated angle does not change writing width.
+Automatic tilt has been removed for both drawing and handwriting.
 The handwriting mode selector and the coordinate-smoothing checkbox remain independent.
 
 **Auto** estimates writing from completed strokes: compact size, duration, speed, curvature,
@@ -118,3 +118,8 @@ Shortcut capture is enabled only for keyboard actions (Undo, Redo, Eraser tool,
 Brush, or an existing recorded shortcut). Held erasing, Space panning, mouse clicks,
 and None disable the shortcut button so recording cannot replace those actions by
 accident. Choose a keyboard action before assigning a different key combination.
+
+
+## Drawing controls in 0.3.8
+
+See [release notes](RELEASE-0.3.8.md) for endpoint settling, shape closure, the start marker, and the strengthened artistic smoothing pipeline.

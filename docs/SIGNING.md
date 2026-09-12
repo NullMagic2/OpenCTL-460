@@ -5,7 +5,7 @@ You do not need to buy a certificate to develop and use this project on a PC.
 
 The normal CTL-460 Studio installer installs the user-mode Windows Ink feeder, settings app,
 and both WinTab DLLs. These components do not require Microsoft kernel-driver signing.
-They use the pressure, handwriting and simulated-tilt processing in this project. Applications
+They use the pressure and handwriting processing in this project. Applications
 that refuse synthetic pen input can require the virtual HID backend instead.
 
 ## Free virtual HID development installation
